@@ -36,16 +36,18 @@ multi sub MAIN("create-database") {
 multi sub MAIN("add", $date, Int $kilometer) {
 	say "add";
 
-	if $date ~~ / <day> \. <month> \. <year> / {
-		say "day ", $<day>;
-		say "month ", $<month>;
-		say "year ", $<year>;
-		my $d = DateTime.new(year => +$<year>, month => +$<month>, day => +$<day>);
-		say $d.posix;
-	} else {
-		say "Could not recognize date string '$date'. Expect patter dd.mm.yyyy";
-	}
+	my $posix = date_is_valid($date);
+	die "Could not recognize date string '$date'. Expect patter dd.mm.yyyy" unless $posix;
 
+	die "$date already exists in the database. Use command change to alter existing entry" if date_exists($date);
+
+	my $sth = $dbh.prepare(q:to/STATEMENT/);
+		INSERT INTO bycicle_kilometer(bk_date, bk_kilometer) VALUES(?,?)
+		STATEMENT
+
+	$sth.execute($posix, $kilometer);
+	$sth.finish;
+	say "added";
 
 }
 
@@ -55,6 +57,48 @@ multi sub MAIN("change", $date, $kilometer) {
 
 multi sub MAIN("average", $type) {
 	say "average";
+}
+
+multi sub MAIN("list") {
+	my $sth = $dbh.prepare(q:to/STATEMENT/);
+		SELECT bk_date, bk_kilometer FROM bycicle_kilometer ORDER BY bk_date
+		STATEMENT
+	$sth.execute;
+	my $arrayref = $sth.fetchall_arrayref;
+
+	say "Date		Kilometer";
+	for $arrayref.values {
+		say get_date_from_posix(+$_[0]), "\t", $_[1];
+	}
+}
+
+sub date_is_valid($date) {
+	if $date ~~ / <day> \. <month> \. <year> / {
+		my $d = DateTime.new(year => +$<year>, month => +$<month>, day => +$<day>);
+		return $d.posix;
+	}
+
+	return False;
+}
+
+sub date_exists($date_posix) {
+	my $sth = $dbh.prepare(q:to/STATEMENT/);
+		SELECT bk_date FROM bycicle_kilometer WHERE bk_date = ?
+		STATEMENT
+	$sth.execute($date_posix);
+	my $arrayref = $sth.fetchall_arrayref();
+	if 0 < $arrayref.elems {
+		$sth.finish;
+		return True;
+	}
+
+	return False;
+}
+
+sub get_date_from_posix($posix) {
+	my $d = DateTime.new($posix);
+
+	return sprintf("%02d.%02d.%d", $d.day,$d.month,$d.year);
 }
 
 sub help() {
