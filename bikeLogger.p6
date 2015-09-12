@@ -2,6 +2,7 @@
 
 use v6;
 use DBIish;
+use Time::Duration;
 
 #########################
 # Variables
@@ -54,7 +55,7 @@ multi sub MAIN("change", $date, $kilometer) {
 	say "change";
 }
 
-multi sub MAIN("average", $type) {
+multi sub MAIN("average") {
 	# first find out what the user want to know.
 	# Initial first the database query
 	
@@ -64,17 +65,19 @@ multi sub MAIN("average", $type) {
 	$sth.execute;
 	my $array_ref = $sth.fetchall_arrayref;
 
+	my ($days_total, $kilometer_total) = 0;
 	my @data_sink;
-	my $start_date = DateTime.new(year => 2012, month => 6, day => 19);
 	my $last_date = DateTime.new(year => 2012, month => 6, day => 19);
 	my $last_kilometer = 0;
 	for $array_ref.values -> $date_kilo_array {
+		$kilometer_total = $date_kilo_array[1];
 		my $d = DateTime.new(+$date_kilo_array[0]);
 
 		# calculate days since last entry.
 		my $days = 0;
 		while $last_date.posix < $d.posix {
 			$days++;
+			$days_total++;
 			$last_date = $last_date.later(days => 1);
 		}
 
@@ -100,6 +103,13 @@ multi sub MAIN("average", $type) {
 								$item<kilometer>,
 								$kilo_per_day,);
 	}
+
+	say "Total:";
+	my $start_date = DateTime.new(year => 2012, month => 6, day => 19);
+	printf("%7s kilometer in %s.\n", $kilometer_total, duration($last_date.posix - $start_date.posix));
+	printf("%7.02f kilometer/day.\n", $kilometer_total / $days_total);
+	my $month = Int($days_total / 7);
+	printf("%7.02f kilometer/week\n", $kilometer_total / $month);
 }
 
 multi sub MAIN("list") {
@@ -136,7 +146,6 @@ multi sub MAIN("delete", $date) {
 #							SUBS
 #
 ##########################################################
-
 sub add_entry($date, $kilometer) {
 	my $posix = date_is_valid($date);
 	die "Could not recognize date string '$date'. Expect patter dd.mm.yyyy" unless $posix;
